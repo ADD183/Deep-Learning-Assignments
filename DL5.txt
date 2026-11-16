@@ -1,0 +1,126 @@
+%pip install genism
+
+import re
+from gensim.models import Word2Vec
+
+#Step 1: Data preparation
+
+text = """
+Alice opened the door and found a small passage.
+Alice wanted to enter the beautiful garden.
+The garden had bright flowers and cool fountains.
+Alice loved the flowers in the garden.
+Machine learning helps computers understand data.
+Machine learning uses words and numerical vectors.
+"""
+
+# Convert to lowercase and split into sentences
+sentences = re.split(r'[.!?]+', text.lower())
+
+# Define basic stop words
+stop_words = {
+    "the", "a", "an", "and", "to", "in", "of",
+    "had", "was", "is", "it", "into"
+}
+
+# Clean and tokenize the sentences
+data = []
+
+for sentence in sentences:
+    words = re.findall(r'\b[a-z]+\b', sentence)
+    words = [word for word in words if word not in stop_words]
+
+    if words:
+        data.append(words)
+
+print("Prepared data:")
+print(data)
+
+#Step 2: Generate training data
+
+window = 2
+training_data = []
+
+for sentence in data:
+    for i in range(window, len(sentence) - window):
+        context = (
+            sentence[i - window:i]
+            + sentence[i + 1:i + window + 1]
+        )
+        target = sentence[i]
+
+        training_data.append((context, target))
+
+print("Training examples:")
+for context, target in training_data[:5]:
+    print("Context:", context, "-> Target:", target)
+
+#Step 3: Train the CBOW model
+
+model = Word2Vec(
+    sentences=data,
+    vector_size=50,
+    window=2,
+    min_count=1,
+    sg=0,
+    workers=1,
+    seed=42,
+    epochs=5
+)
+
+print("CBOW model trained successfully!")
+
+# Step 4: Display the output
+
+# Display the vocabulary
+print("Vocabulary:")
+print(model.wv.index_to_key)
+
+# Display the vector for a word
+word = "garden"
+
+print("\nVector for", word, ":")
+print(model.wv[word])
+
+# Display similar words
+print("\nWords similar to", word, ":")
+for similar_word, score in model.wv.most_similar(word, topn=5):
+    print(similar_word, ":", round(score, 3))
+
+import matplotlib.pyplot as plt
+from sklearn.decomposition import PCA
+import numpy as np
+
+# Define the target word
+target_word = "garden"
+
+# Get similar words and their scores
+similar_words_data = model.wv.most_similar(target_word, topn=5)
+similar_words = [item[0] for item in similar_words_data]
+
+# Combine the target word and similar words into one list
+words_to_plot = [target_word] + similar_words
+
+# Retrieve vectors for these words
+word_vectors = np.array([model.wv[word] for word in words_to_plot])
+
+# Reduce dimensions to 2D using PCA
+pca = PCA(n_components=2, random_state=42)
+vectors_2d = pca.fit_transform(word_vectors)
+
+# Create the scatter plot
+plt.figure(figsize=(8, 6))
+
+# Plot target word in red, others in blue
+colors = ['red'] + ['blue'] * len(similar_words)
+
+for i, word in enumerate(words_to_plot):
+    x, y = vectors_2d[i, 0], vectors_2d[i, 1]
+    plt.scatter(x, y, color=colors[i], edgecolors='black', s=100)
+    plt.text(x + 0.001, y + 0.001, word, fontsize=12, weight='bold' if word == target_word else 'normal')
+
+plt.title(f"2D PCA Projection of '{target_word}' and its Similar Words")
+plt.xlabel("PC1")
+plt.ylabel("PC2")
+plt.grid(True, linestyle='--', alpha=0.5)
+plt.show()
